@@ -118,26 +118,42 @@ namespace LightController
                             }
                             Utility.SetLocalTime(currentDayTime);
                             Debug.Print("time is now " + DateTime.Now.Hour + ":" + DateTime.Now.Minute + ":" + DateTime.Now.Second);
+
+                            // tell rest of application that the time has been set
+                            raiseCommand(strCommand); 
+
                             if (blnSendResponse)
                             {
                                 WriteToUART("OK");
                                 return true;
                             }
+
                         }
                         break;
 
                     case 'D':
-                        // format must be yy-mm-dd
+                        // format must be yy-mm-dd or yyyy-mm-dd
                         string[] strDateParts = strCommand.Substring(2).Split(new char[] { ':', ' ', '.', '-' });
                         if (strDateParts.Length >= 3)
                         {
-                            DateTime currentDayTime = new DateTime(Int16.Parse(strDateParts[0]), 
+                            Int16 intYear = Int16.Parse(strDateParts[0]);
+                            // if yy, convert to yyyy
+                            if (intYear < 100)
+                            {
+                                intYear += 2000;
+                            }
+                           
+                            DateTime currentDayTime = new DateTime(intYear, 
                                 Int16.Parse(strDateParts[1]), Int16.Parse(strDateParts[2]), DateTime.Now.Hour,
                                 DateTime.Now.Minute, DateTime.Now.Second);
 
 
-                            Utility.SetLocalTime(currentDayTime);
+                            Utility.SetLocalTime(currentDayTime);                            
                             Debug.Print("date is now " + DateTime.Now.Year + "-" + DateTime.Now.Month + ":" + DateTime.Now.Day);
+
+                            // tell rest of application that the date has been set
+                            raiseCommand(strCommand); 
+
                             if (blnSendResponse)
                             {
                                 WriteToUART("OK");
@@ -149,9 +165,10 @@ namespace LightController
 
                     default:
                         // looks like a command - maybe some other part of the program knows how to handle it?
-                        CommandArgs args = new CommandArgs(strCommand);
-                        Command(this, args);
-                        if (args.blnHandled)
+                        //CommandArgs args = new CommandArgs(strCommand);
+                        //Command(this, args);
+                        //if (args.blnHandled)
+                        if (raiseCommand(strCommand))
                         {
                             WriteToUART("OK");
                             return true;
@@ -170,7 +187,7 @@ namespace LightController
                 Debug.Print(ex.Message);
                 if (blnSendResponse)
                 {
-                    WriteToUART("?\r");
+                    WriteToUART("?");
                 }
                 return false;
             }
@@ -230,7 +247,24 @@ namespace LightController
             }
         }
 
+        /// <summary>
+        /// Raise event telling rest of program that a command was received over the serial port
+        /// </summary>
+        /// <param name="strCommand">Command text (format is x:[xxxx...])</param>
+        /// <returns>true if command was handled by one of the event recipients</returns>
+        private bool raiseCommand(string strCommand)
+        {
+            CommandArgs args = new CommandArgs(strCommand);
+            // raise event using Command delegate
+            Command(this, args);
+            return args.blnHandled;
+        }
+
     }
+
+    
+
+
     public class CommandArgs : EventArgs
     {
         public string StrCommand { get; set; }
