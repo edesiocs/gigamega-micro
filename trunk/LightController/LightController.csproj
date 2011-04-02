@@ -30,6 +30,7 @@
   </PropertyGroup>
   <Import Project="$(NetMfTargetsBaseDir)$(TargetFrameworkVersion)\CSharp.Targets" />
   <ItemGroup>
+    <Compile Include="clsLCDMenu.cs" />
     <Compile Include="clsLCD_MLC.cs" />
     <Compile Include="clsLCD_MO.cs" />
     <Compile Include="clsLCD_SF.cs" />
