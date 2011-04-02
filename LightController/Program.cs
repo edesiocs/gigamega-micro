@@ -18,6 +18,13 @@ namespace LightController
     public class Program
     {
 
+        //TODO ---------- Replace the following with your local longitude and latitude and timezone offset from UTC --------------
+        // settings for Toronto Canada
+        const double MY_LONGITUDE = -79.38;
+        const double MY_LATITUDE = 43.65;
+        const int UTC_OFFSET = -5;
+        const bool USE_DAYLIGHT_SAVINGS = false;
+
         static ILCD lcd = null;
         static clsUART uart = null;
         static InterruptPort buttonRed;
@@ -47,6 +54,13 @@ namespace LightController
         static bool blnShowTimers;
         static bool blnShowCountDown;
 
+        static bool blnDateSet;
+        static bool blnTimeSet;
+        static bool blnLightOnAtSunset = true; // on by default, but set off if timer set manually
+        static string strSunset;
+
+        static SunCalculator sunCalc;
+
         const int BUTTON_DELAY = 2000;
 
         public static void Main()
@@ -75,17 +89,27 @@ namespace LightController
 
         private static void initializePins()
         {
+            // initialize - will be set to actual values based on which LCD is being used
+            string strUARTPort = "";
+            Cpu.Pin relayPin = Pins.GPIO_NONE;
+
             try
             {
 #if MATRIX_ORBITAL
                 lcd = new clsLCD_MO(SerialPorts.COM2, 9600, 2, 16);
+                strUARTPort = SerialPorts.COM1;
+                relayPin = Pins.GPIO_PIN_D13;
 #else
 #if SPARKFUN
-            lcd = new clsLCD_SF(SerialPorts.COM2, 9600, 4, 20);
+                lcd = new clsLCD_SF(SerialPorts.COM2, 9600, 4, 20);
+                strUARTPort = SerialPorts.COM1;
+                relayPin = Pins.GPIO_PIN_D13;
 #else
 #if MICRO_LIQUID_CRYSTAL
                 lcd = new clsLCD_MLC(Pins.GPIO_PIN_D4, Pins.GPIO_PIN_D13, Pins.GPIO_PIN_D5,
-                Pins.GPIO_PIN_D9, Pins.GPIO_PIN_D10, Pins.GPIO_PIN_D11, Pins.GPIO_PIN_D12, 2, 8);
+                    Pins.GPIO_PIN_D9, Pins.GPIO_PIN_D10, Pins.GPIO_PIN_D11, Pins.GPIO_PIN_D12, 2, 8);
+                strUARTPort = SerialPorts.COM2;
+                relayPin = Pins.GPIO_PIN_D0;
 #endif
 #endif
 #endif
@@ -97,7 +121,8 @@ namespace LightController
             }
             try
             {
-                uart = new clsUART(SerialPorts.COM2, 9600, 50, true);
+
+                uart = new clsUART(strUARTPort, 9600, 50, true);
                 uart.Command += new CommandEventHandler(uart_Command);
             }
             catch (Exception ex)
@@ -118,7 +143,7 @@ namespace LightController
 
                 pot = new AnalogInput(Pins.GPIO_PIN_A0);
                 temperature = new AnalogInput(Pins.GPIO_PIN_A2);
-                relay = new OutputPort(Pins.GPIO_PIN_D0, false);
+                relay = new OutputPort(relayPin, false);
                 buzzer = new PWM(Pins.GPIO_PIN_D6);
             }
             catch (Exception ex)
@@ -176,11 +201,25 @@ namespace LightController
                 else if (command == '+')
                 {
                     e.blnHandled = setLightTime(e.StrCommand.Substring(2), true);
+                    // if Light On time manually set, then always use it, not sunset
+                    blnLightOnAtSunset = false; 
                 }
                 // turn light on +:hh:mm               
                 else if (command == '-')
                 {
                     e.blnHandled = setLightTime(e.StrCommand.Substring(2), false);
+                }
+                else if (command == 'D')
+                {
+                    blnDateSet = true;
+                    // set default light timer if date and time have been set for the first time
+                    setDefaultTimers(); 
+                }
+                else if (command == 'T')
+                {
+                    blnTimeSet = true;
+                    // set default light timer if date and time have been set for the first time
+                    setDefaultTimers(); 
                 }
             }
             catch (Exception ex)
@@ -258,7 +297,13 @@ namespace LightController
                 {
                     lcd.SelectLine(2, true);
                     // round to 1 decimal place
-                    lcd.WriteStringToLCD(degrees.ToString("F1") + strFormat);
+                    string strLine = degrees.ToString("F1") + strFormat;
+                    // if sunset time is set, and LCD has enough cols, display sunset
+                    if (lcd.GetNumCols() >= 16 && strSunset != null)
+                    {
+                        strLine += "  Sun " + strSunset;
+                    }
+                    lcd.WriteStringToLCD(strLine);
                 }
 
 
@@ -441,6 +486,12 @@ namespace LightController
                 {
                     datNextOn = datNextOn.AddDays(1);
                 }
+                if (blnLightOnAtSunset)
+                {                  
+                    // set light to turn on 15 minutes before sunset tomorrow
+                    DateTime datLightOn = calculateSunset(DateTime.Now.AddDays(1)).AddMinutes(-15);
+                    setLightOnTimer(datLightOn);
+                }
             }
             else
             {
@@ -482,7 +533,8 @@ namespace LightController
                             } else
                             {
                                 TimeSpan timeTo = datNextOff.Subtract(DateTime.Now);
-                                strCountdown = timeTo.ToString();
+                                //HACK - truncate fractional seconds by assuming hh:mm:ss format
+                                strCountdown = timeTo.ToString().Substring(0, 8);
                             } 
                             lcd.SelectLine(1, true);
                             lcd.WriteStringToLCD(strCountdown);
@@ -497,7 +549,8 @@ namespace LightController
                             } else
                             {
                                 TimeSpan timeTo = datNextOn.Subtract(DateTime.Now);
-                                strCountdown = timeTo.ToString();
+                                //HACK - truncate fractional seconds by assuming hh:mm:ss format
+                                strCountdown = timeTo.ToString().Substring(0, 8);
                             }
                             lcd.SelectLine(1, true);
                             lcd.WriteStringToLCD(strCountdown);
@@ -544,8 +597,15 @@ namespace LightController
             }
             Debug.Print("setting light on timer to " + datAlarm);
             strLightOn = "+ " + datAlarm.ToString("HH:mm");
-            // set the timer to go off at this date, and every 24 hours after that
-            tmrLightOn = new ExtendedTimer(new TimerCallback(SetLightState), true, datAlarm, new TimeSpan(1, 0, 0, 0));
+            // set the timer to go off at this date, and repeat forever if we aren't recalculating based on sunset
+            // NOTE - MSDN says period can be set to TimeoutInfinite, but TimeSpan(-1) causes out of range exception
+            TimeSpan tsRepeat = TimeSpan.MaxValue;
+            if (!blnLightOnAtSunset)
+            {
+                // repeat timer at same time every day
+                tsRepeat = new TimeSpan(1, 0, 0, 0);
+            }
+            tmrLightOn = new ExtendedTimer(new TimerCallback(SetLightState), true, datAlarm, tsRepeat);
             datNextOn = datAlarm;
 
 
@@ -637,6 +697,27 @@ namespace LightController
             datNextOff = DateTime.MinValue;
             // give audible confirmation, so user can let go of buttons
             beep(true);
+        }
+
+        static DateTime calculateSunset(DateTime date)
+        {
+            sunCalc = new SunCalculator(MY_LONGITUDE, MY_LATITUDE, UTC_OFFSET * 15, USE_DAYLIGHT_SAVINGS);
+            DateTime datSunset = sunCalc.CalculateSunSet(date);
+            Debug.Print("sunset is " + datSunset);
+            strSunset = datSunset.ToString("HH:mm");
+            return datSunset;
+        }
+
+        static void setDefaultTimers()
+        {
+            if (blnTimeSet && blnDateSet && blnLightOnAtSunset)
+            {
+                // set light to turn on 15 minutes before sunset
+                DateTime datLightOn = calculateSunset(DateTime.Now).AddMinutes(-15);
+                setLightTime(datLightOn.ToString("HH:mm"), true);
+                // set light to turn off at 11 pm
+                setLightTime("23:00", false);
+            }
         }
 
     }
