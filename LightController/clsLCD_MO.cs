@@ -131,11 +131,11 @@ namespace LightController
             command[0] = 254;
             if (blnBlock)
             {
-                command[1] = 74;
+                command[1] = 83; // block cursor
             }
             else
             {
-                command[1] = 83; // underline cursor
+                command[1] = 74; // underline cursor
             }
 
             lcd.Write(command, 0, command.Length);

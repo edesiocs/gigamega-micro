@@ -83,7 +83,7 @@ namespace LightController
             }
             catch (Exception ex)
             {
-                Debug.Assert(false);
+                //Debug.Assert(false);
                 Debug.Print(ex.Message);
             }
         }
@@ -183,7 +183,7 @@ namespace LightController
             }
             catch (Exception ex)
             {
-                Debug.Assert(false);
+                //Debug.Assert(false);
                 Debug.Print(ex.Message);
                 if (blnSendResponse)
                 {

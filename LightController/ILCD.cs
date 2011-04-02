@@ -1,7 +1,7 @@
 ﻿using System;
 namespace LightController
 {
-    interface ILCD
+    public interface ILCD
     {
         /// <summary>
         /// Clear contents of LCD and set cursor to 1st col of 1st row
