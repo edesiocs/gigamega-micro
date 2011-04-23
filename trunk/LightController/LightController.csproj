@@ -34,6 +34,7 @@
     <Compile Include="clsLCD_MLC.cs" />
     <Compile Include="clsLCD_MO.cs" />
     <Compile Include="clsLCD_SF.cs" />
+    <Compile Include="clsLCD_SFKit.cs" />
     <Compile Include="clsUART.cs" />
     <Compile Include="exMath.cs" />
     <Compile Include="ILCD.cs" />

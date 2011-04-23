@@ -12,10 +12,10 @@ namespace LightController
     public class clsLCD_SF : ILCD
     {
 
-        private SerialPort lcd;
-        private byte numRows;
-        private byte numCols;
-        string strBlankRow;
+        protected SerialPort lcd;
+        protected byte numRows;
+        protected byte numCols;
+        protected string strBlankRow;
 
         public clsLCD_SF(string strPort, Int16 intBaud, byte rows, byte cols)
         {
@@ -26,6 +26,12 @@ namespace LightController
             //SF_SetScreenSize(rows, cols);
             strBlankRow = new string(' ', cols);
 
+        }
+
+        // empty constructor used when subclassed
+        public clsLCD_SF()
+        {
+            
         }
 
         public void ClearScreen()
