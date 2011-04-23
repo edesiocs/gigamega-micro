@@ -254,6 +254,11 @@ namespace LightController
         /// <returns>true if command was handled by one of the event recipients</returns>
         private bool raiseCommand(string strCommand)
         {
+            if (Command == null)
+            {
+                // there are no event handlers out there
+                return false;
+            }
             CommandArgs args = new CommandArgs(strCommand);
             // raise event using Command delegate
             Command(this, args);

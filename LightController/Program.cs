@@ -1,6 +1,8 @@
-﻿//#define MATRIX_ORBITAL
-//#define SPARKFUN
-#define MICRO_LIQUID_CRYSTAL
+﻿//#define MATRIX_ORBITAL // Matrix Orbital Serial LCD
+//#define SPARKFUN  // SparkFun Serial LCD Backpack
+//#define MICRO_LIQUID_CRYSTAL  // Parallel LCD
+#define SPARKFUN_KIT // SparkFun Serial LCD Kit
+#define NO_UART // disable use of COM port for Serial UART communication
 using System;
 using System.Threading;
 using System.IO.Ports;
@@ -68,8 +70,13 @@ namespace LightController
 
         static byte bytBrightness = 0;
         static string strTemperature = "";
+        static string strHumidity = "";
+        static string strTempDHT11 = "";
         static bool blnBacklight = true;
         static bool blnManualBrightness;
+        static OutputPort arduino;
+        static int intLastHour; // hour last time we checked
+        static DateTime datlastArduinoRead = DateTime.MinValue; // date and time of last data sent by Arduino
 
         const int BUTTON_DELAY = 2000;
 
@@ -86,8 +93,10 @@ namespace LightController
                                               "3-1", "Light Off `HH:mm-`", "3-3",
                                               "3-2", "Manual `HH:mm+`", "3-2-1",
                                               "3-2", "Sunset `HH:mm_`", "_SUNSET",
+                                              "3-2", "None", "_NOLITE",
                                               "3-3", "Manual `HH:mm-`", "3-3-1",
                                               "3-3", "Sunrise `HH:mm*`", "_SUNRISE",
+                                              "3-3", "None", "_NOLITE",
                                               "3-2-1", "Hour `HH+`", "_UD-`HH+`",
                                               "3-2-1", "Min `mm+`", "_UD-`mm+`",
                                               "3-3-1", "Hour `HH-`", "_UD-`HH-`",
@@ -100,6 +109,20 @@ namespace LightController
                                         };
         private static clsLCDMenu menu;
 
+        // EEPROM addresses for saving settings
+        //  NOTE - timers are saved as 
+        const byte ADDR_START = 6;
+        const byte ADDR_LIGHTON_HOUR = 6;
+        const byte ADDR_LIGHTON_MIN = 7;
+        const byte ADDR_LIGHTOFF_HOUR = 8;
+        const byte ADDR_LIGHTOFF_MIN = 9;
+        const byte ADDR_TEMP_FORMAT = 10;
+        const byte ADDR_LCD_BRITE = 11;
+        const byte ADDR_YEAR = 12;
+        const byte ADDR_MONTH = 13;
+        const byte ADDR_DAY = 14;
+        const byte ADDR_END = 14;
+
         public static void Main()
         {
 
@@ -111,6 +134,7 @@ namespace LightController
             // update time every second
             timerTime = new Timer(new TimerCallback(displayTime), null, 1000, 1000);
 
+            LoadSettingsFromEEPROM();
             if (lcd != null)
             {
                 lcd.ClearScreen();
@@ -147,6 +171,18 @@ namespace LightController
                     Pins.GPIO_PIN_D9, Pins.GPIO_PIN_D10, Pins.GPIO_PIN_D11, Pins.GPIO_PIN_D12, 2, 8);
                 strUARTPort = SerialPorts.COM2;
                 relayPin = Pins.GPIO_PIN_D0;
+#else
+#if SPARKFUN_KIT
+                // power to transistor controlling Arduino power
+                arduino = new OutputPort(SecretLabs.NETMF.Hardware.Netduino.Pins.GPIO_PIN_D12, false);
+                arduino.Write(true); // turn on Arduino
+                Thread.Sleep(2000); // give Arduino a chance to do its initialization
+                lcd = new clsLCD_SFKit(SerialPorts.COM2, 9600, 2, 16);
+                ((clsLCD_SFKit)lcd).Command +=new CommandEventHandler(uart_Command);
+                strUARTPort = SerialPorts.COM1;
+                relayPin = Pins.GPIO_PIN_D13;
+
+#endif
 #endif
 #endif
 #endif
@@ -158,9 +194,12 @@ namespace LightController
             }
             try
             {
+#if !NO_UART
 
                 uart = new clsUART(strUARTPort, 9600, 50, true);
+
                 uart.Command += new CommandEventHandler(uart_Command);
+#endif
             }
             catch (Exception ex)
             {
@@ -197,6 +236,7 @@ namespace LightController
             {
                 Debug.Print("in uart_Command: " + e.StrCommand);
                 char command = e.StrCommand[0];
+                string[] strParts;
                 if (command == 'B')
                 {
                     if (lcd != null)
@@ -205,6 +245,10 @@ namespace LightController
 
                         lcd.SetBrightness(bytBrightness);
                         blnManualBrightness = true; // ignore pot setting
+                        byte value = bytBrightness;
+                        if (bytBrightness < 255)
+                            value += 1; // add 1, since 0 value means not saved
+                        SaveSettingToEEPROM(ADDR_LCD_BRITE, (byte)(value));
                     }
                     e.blnHandled = true;
                 }
@@ -213,10 +257,12 @@ namespace LightController
                     if (e.StrCommand[2] == 'F')
                     {
                         blnFahr = true;
+                        SaveSettingToEEPROM(ADDR_TEMP_FORMAT, 1);
                     }
                     else
                     {
                         blnFahr = false;
+                        SaveSettingToEEPROM(ADDR_TEMP_FORMAT, 2);
                     }
                     // update Temperature right away so user knows it worked
                     displayTemperature(null);
@@ -242,12 +288,14 @@ namespace LightController
                 {
                     e.blnHandled = setLightTime(e.StrCommand.Substring(2), true);
                     // if Light On time manually set, then always use it, not sunset
-                    blnLightOnAtSunset = false; 
+                    blnLightOnAtSunset = false;
+                    //TODO - save to EEPROM
                 }
                 // turn light on +:hh:mm               
                 else if (command == '-')
                 {
                     e.blnHandled = setLightTime(e.StrCommand.Substring(2), false);
+                    //TODO - save to EEPROM
                 }
                 else if (command == 'D')
                 {
@@ -259,7 +307,29 @@ namespace LightController
                 {
                     blnTimeSet = true;
                     // set default light timer if date and time have been set for the first time
-                    setDefaultTimers(); 
+                    setDefaultTimers();
+                }
+                else if (command == 'H')
+                {
+                    // got humidity and temperature via Arduino
+                    // format is H:nn.n;nn.n, where 1st reading is humidity and 2nd is temperature
+                    strParts = e.StrCommand.Split(new char[] { ';', ':' });
+                    strHumidity = strParts[1];
+                    strTempDHT11 = strParts[2];
+                    datlastArduinoRead = DateTime.Now;
+                }
+                else if (command == 'S')
+                {
+                    // setting loaded from EEPROM
+                    // format is S:<address>,<value>, where address is the EEPROM address (1-255) and value is the value stored
+                    //  in that address (0-255)
+                    strParts = e.StrCommand.Substring(2).Split(new char[] {','});
+                    byte addr = Byte.Parse(strParts[0]);
+                    byte value = Byte.Parse(strParts[1]);
+                    if (value > 0) // our values are always > 0, so 0 means setting has never been saved
+                    {
+                        handleSetting(addr, value);
+                    }
                 }
             }
             catch (Exception ex)
@@ -343,6 +413,12 @@ namespace LightController
         {
             try
             {
+                if (lcd is clsLCD_SFKit)
+                {
+                    // get the humidity
+                    ((clsLCD_SFKit)lcd).RequestHumidityAndTemp();
+                    Thread.Sleep(300); // wait to see  if it is updated - if not, will use last reading
+                }
                 calcTemperature();
 
                 if (lcd != null  && !blnShowTimers)
@@ -351,9 +427,16 @@ namespace LightController
 
                     string strLine = strTemperature;
                     // if sunset time is set, and LCD has enough cols, display sunset
-                    if (lcd.GetNumCols() >= 16 && strSunset != null)
+                    if (lcd.GetNumCols() >= 16)
                     {
-                        strLine += "  Sun " + strSunset;
+                        if (strHumidity != "")
+                        {
+                            // add temperature and relative humidity from DHT11 sensor 
+                            strLine += " (" + strTempDHT11.Substring(0, 2) + ") " + strHumidity.Substring(0, 2) + "%";
+                        } else if (strSunset != null)
+                        {
+                            strLine += "  Sun " + strSunset;
+                        }
                     }
                     lcd.WriteStringToLCD(strLine);
                 }
@@ -466,7 +549,8 @@ namespace LightController
                 }
                 else
                 {
-                    ToggleComPort();
+                    //ToggleComPort();
+                    ToggleArduino();
                 }
             }
             else
@@ -624,6 +708,7 @@ namespace LightController
                         }
                     }
                 }
+                checkForChanges();
             }
         }
 
@@ -977,6 +1062,8 @@ namespace LightController
                 // set light to turn on 15 minutes before sunset
                 DateTime datLightOn = datSunset.AddMinutes(-15);
                 setLightTime(datLightOn.ToString("HH:mm"), true);
+                SaveSettingToEEPROM(ADDR_LIGHTON_HOUR, 254); // 254 means sunset
+                SaveSettingToEEPROM(ADDR_LIGHTON_MIN, 254);
             }
             else if (menuCode == "_SUNRISE")
             {
@@ -988,6 +1075,8 @@ namespace LightController
                 // set light to turn off 15 minutes after sunrise
                 DateTime datLightOff = datSunrise.AddMinutes(15);
                 setLightTime(datLightOff.ToString("HH:mm"), false);
+                SaveSettingToEEPROM(ADDR_LIGHTOFF_HOUR, 254); // 254 means sunrise
+                SaveSettingToEEPROM(ADDR_LIGHTOFF_MIN, 254);
             }
             else if (menuCode == "_CELCIUS")
             {
@@ -995,19 +1084,32 @@ namespace LightController
                 blnFahr = false;
                 // recalc temperature so that it is displayed in right format in menu
                 calcTemperature();
+                SaveSettingToEEPROM(ADDR_TEMP_FORMAT, 2); // 2 means Celcius
             }
             else if (menuCode == "_FAHR")
             {
                 blnFahr = true;
                 // recalc temperature so that it is displayed in right format in menu
                 calcTemperature();
+                SaveSettingToEEPROM(ADDR_TEMP_FORMAT, 1); // 1 means Fahrenheit
             }
             else if (menuCode == "_BACKLITE")
             {
                 // toggle backlight
                 blnBacklight = !blnBacklight;
                 lcd.SetBacklight(blnBacklight);
-            } else
+                // not saved permanently to EEPROM
+            }
+            else if (menuCode == "_NOLITE")
+            {
+                // disable timers
+                datNextOn = DateTime.MinValue;
+                datNextOff = DateTime.MinValue;
+                tmrLightOn.Dispose();
+                tmrLightOn = null;
+                tmrLightOff.Dispose();
+                tmrLightOff = null;
+            }
             {
                 string[] strParts = menuCode.Split(new char[] { '`' });
                 // first part is probably UD_, but we actually only care about the format code
@@ -1017,40 +1119,55 @@ namespace LightController
                 {
                     case "yy":
                         Utility.SetLocalTime(new DateTime(2000 + intValue, date.Month, date.Day, date.Hour, date.Minute, date.Second));
+                        checkTimers();
+                        SaveSettingToEEPROM(ADDR_YEAR, (byte)intValue);
                         break;
                     case "MM":
                         Utility.SetLocalTime(new DateTime(date.Year, intValue, date.Day, date.Hour, date.Minute, date.Second));
+                        checkTimers();
+                        SaveSettingToEEPROM(ADDR_MONTH, (byte)intValue);
                         break;
                     case "dd":
                         Utility.SetLocalTime(new DateTime(date.Year, date.Month, intValue, date.Hour, date.Minute, date.Second));
+                        checkTimers();
+                        SaveSettingToEEPROM(ADDR_DAY, (byte)intValue);
                         break;
                     case "HH":
                         Utility.SetLocalTime(new DateTime(date.Year, date.Month, date.Day, intValue, date.Minute, date.Second));
+                        checkTimers();
                         break;
                     case "mm":
                         Utility.SetLocalTime(new DateTime(date.Year, date.Month, date.Day, date.Hour, intValue, date.Second));
+                        checkTimers();
                         break;
                     case "HH+":
                         strTime = Int_ToZeroPrefixedString(intValue, 2) + datNextOn.ToString(":mm");
                         setLightTime(strTime, true);
+                        SaveSettingToEEPROM(ADDR_LIGHTON_HOUR, (byte)(intValue + 1)); // add 1, since 0 value means not saved
                         break;
                     case "mm+":
                         strTime = datNextOn.ToString("HH:") + Int_ToZeroPrefixedString(intValue, 2);
                         setLightTime(strTime, true);
+                        SaveSettingToEEPROM(ADDR_LIGHTON_MIN, (byte)(intValue + 1)); // add 1, since 0 value means not saved
                         break;
                     case "HH-":
                         strTime = Int_ToZeroPrefixedString(intValue, 2) + datNextOff.ToString(":mm");
                         setLightTime(strTime, false);
+                        SaveSettingToEEPROM(ADDR_LIGHTOFF_HOUR, (byte)(intValue + 1)); // add 1, since 0 value means not saved
                         break;
                     case "mm-":
                         strTime = datNextOff.ToString("HH:") + Int_ToZeroPrefixedString(intValue, 2);
                         setLightTime(strTime, false);
+                        SaveSettingToEEPROM(ADDR_LIGHTOFF_MIN, (byte)(intValue + 1)); // add 1, since 0 value means not saved
                         break;
                     case "BR":
                         // LCD brightness
                         bytBrightness = (byte)intValue;
                         lcd.SetBrightness(bytBrightness);
                         blnManualBrightness = true; // ignore pot setting
+                        if (intValue < 255)
+                            intValue += 1; // add 1, since 0 value means not saved
+                        SaveSettingToEEPROM(ADDR_LCD_BRITE, (byte)(intValue)); 
                         break;
                     default:
                         Debug.Print("unknown format code in setValueForMenu: " + menuCode);
@@ -1078,6 +1195,210 @@ namespace LightController
         {
             string strValue = new string('0', intOutLen) + intValue;
             return strValue.Substring(strValue.Length - intOutLen);
+
+        }
+
+        /// <summary>
+        /// Load settings from EEPROM.  EEPROM address locations are integers starting at 1, as defined by constants
+        /// at the beginning of this class
+        /// </summary>
+        static void LoadSettingsFromEEPROM()
+        {
+            if (lcd is clsLCD_SFKit)
+            {
+                // load all the settings - uart_Command event is raised to return the value
+                for (byte counter = ADDR_START; counter <= ADDR_END; counter++)
+                {
+                    ((clsLCD_SFKit)lcd).RequestSetting(counter);
+                }
+            }
+        }
+
+        static void SaveSettingToEEPROM(byte address, byte value)
+        {
+            try
+            {
+                if (lcd is clsLCD_SFKit)
+                {
+                    ((clsLCD_SFKit)lcd).SaveSetting(address, value);                  
+                }
+            }
+            catch (Exception ex)
+            {
+                // catch and release
+                Debug.Assert(false);
+                Debug.Print("Exception in SaveSettingToEEPROM: " + ex.Message);
+            }
+        }
+
+        static void handleSetting(byte address, byte value)
+        {
+            DateTime date = DateTime.Now;
+            string strTime;
+            switch (address)
+            {
+                    case ADDR_YEAR:
+                        Utility.SetLocalTime(new DateTime(2000 + value, date.Month, date.Day, date.Hour, date.Minute, date.Second));
+                        break;
+                    case ADDR_MONTH:
+                        Utility.SetLocalTime(new DateTime(date.Year, value, date.Day, date.Hour, date.Minute, date.Second));
+                        break;
+                    case ADDR_DAY:
+                        Utility.SetLocalTime(new DateTime(date.Year, date.Month, value, date.Hour, date.Minute, date.Second));
+                        break;
+                    case ADDR_LIGHTON_HOUR:
+                        // 254 means sunset
+                        if (value == 254)
+                        {
+                            if (datSunset == DateTime.MinValue)
+                            {
+                                // try calculating sunset
+                                calculateSunriseAndSunset(DateTime.Now);                    
+                            }
+                            // set light to turn on 15 minutes before sunset
+                            DateTime datLightOn = datSunset.AddMinutes(-15);
+                            setLightTime(datLightOn.ToString("HH:mm"), true);
+                        } else
+                        if (value != 255) // 255 means light timer is turned off
+                        {
+                            // hour is always saved as value + 1, since 0 means unset
+                            strTime = Int_ToZeroPrefixedString((int)(value - 1), 2) + datNextOn.ToString(":mm");
+                            setLightTime(strTime, true);
+                        } 
+                        break;
+                    case ADDR_LIGHTON_MIN:
+                        // 254 means sunset
+                        if (value == 254)
+                        {
+                            // ignore - set when Light On Hour is loaded
+                        } else
+                        if (value != 255) // 255 means light timer is turned off
+                        {
+                            // minute is always saved as value + 1, since 0 means unset
+                            strTime = datNextOn.ToString("HH:") + Int_ToZeroPrefixedString((value - 1), 2);
+                            setLightTime(strTime, true);
+                        }
+                        break;
+                    case ADDR_LIGHTOFF_HOUR:
+                        // 254 means sunrise
+                        if (value == 254)
+                        {
+                            if (datSunrise == DateTime.MinValue)
+                            {
+                                // try calculating sunset
+                                calculateSunriseAndSunset(DateTime.Now);
+                            }
+                            // set light to turn off 15 minutes after sunrise
+                            DateTime datLightOff = datSunrise.AddMinutes(15);
+                            setLightTime(datLightOff.ToString("HH:mm"), false);
+                        } else
+                        if (value != 255) // 255 means light timer is turned off
+                        {
+                            // hour is always saved as value + 1, since 0 means unset
+                            strTime = Int_ToZeroPrefixedString(value - 1, 2) + datNextOff.ToString(":mm");
+                            setLightTime(strTime, false);
+                        }
+                        break;
+                    case ADDR_LIGHTOFF_MIN:
+                        // 254 means sunrise
+                        if (value == 254)
+                        {
+                            // ignore - set when Light Off Hour is loaded
+                        } else
+                        if (value != 255) // 255 means light timer is turned off
+                        {
+                            // minute is always saved as value + 1, since 0 means unset
+                            strTime = datNextOff.ToString("HH:") + Int_ToZeroPrefixedString(value - 1, 2);
+                            setLightTime(strTime, false);
+                        }
+                        break;
+                    case ADDR_LCD_BRITE:
+                        // LCD brightness is always saved as value + 1, since 0 means unset
+                        bytBrightness = (byte)(value - 1);
+                        lcd.SetBrightness(bytBrightness);
+                        blnManualBrightness = true; // ignore pot setting
+                        break;
+                case ADDR_TEMP_FORMAT:
+                        if (value == 1)
+                        {
+                            blnFahr = true;
+                        }
+                        else if (value == 2)
+                        {
+                            blnFahr = false;
+                        }
+                        break;
+  
+                    default:
+                        Debug.Print("unknown address  in handleSetting: " + address);
+                        break;
+
+            }
+
+        }
+
+        static void ToggleArduino()
+        {
+            try {
+                arduino.Write(false);
+                Thread.Sleep(1000);
+                arduino.Write(true);
+                // let Arduino do its initialization
+                Thread.Sleep(2000);
+                // restore the brightness setting
+                lcd.SetBrightness(bytBrightness);
+            }
+            catch (Exception ex)
+            {
+                // catch and release
+                Debug.Assert(false);
+                Debug.Print("Exception in toggleArduino: " + ex.Message);
+            }
+        }
+
+        static void checkForChanges()
+        {
+
+            if (DateTime.Now.Hour != intLastHour)
+            {
+                intLastHour = DateTime.Now.Hour;
+                // if we haven't received any data from the Arduino for over an hour, reboot it
+                if (datlastArduinoRead != DateTime.MinValue && DateTime.Now.Subtract(datlastArduinoRead).Hours > 0)
+                {
+                    datlastArduinoRead = DateTime.MinValue; // prevent another reboot 
+                    ToggleArduino();
+                }
+
+                if (DateTime.Now.Hour == 0)
+                {
+                    // a new day!
+                    SaveSettingToEEPROM(ADDR_DAY, (byte)(DateTime.Now.Day));
+
+                    if (DateTime.Now.Day == 1)
+                    {
+                        // a new month!
+                        SaveSettingToEEPROM(ADDR_MONTH, (byte)(DateTime.Now.Month));
+                        if (DateTime.Now.Month == 1)
+                        {
+                            // a new year!
+                            SaveSettingToEEPROM(ADDR_YEAR, (byte)(DateTime.Now.Year - 2000));
+                        }
+                    }
+                }
+            }
+        }
+
+        // reset the timers after the current date or time has been changed by the user
+        static void checkTimers()
+        {
+            if (datNextOn != DateTime.MinValue)
+            {
+                setLightTime(datNextOn.ToString("HH:mm"), true);
+                if (datNextOff != DateTime.MinValue)
+                {
+                    setLightTime(datNextOff.ToString("HH:mm"), false);
+                }
+            }
 
         }
 
