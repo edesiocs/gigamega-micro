@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual C# Express 2010
+# Visual Studio 2010
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LightController", "LightController\LightController.csproj", "{6FAC5293-3A5D-460D-91B4-0D5F080E9DDF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MicroLiquidCrystal", "..\MicroLiquidCrystal\MicroLiquidCrystal.csproj", "{B4B72543-E638-44F1-B096-9BBB6BD4698B}"
