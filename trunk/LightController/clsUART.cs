@@ -34,7 +34,7 @@ namespace LightController
             UART.Open();
             UART.DataReceived += new SerialDataReceivedEventHandler(UART_DataReceived);
             Debug.Print(strPort + " Opened at baud " + intBaud);
-            WriteToUART("Hello World");
+            //WriteToUART("Hello World");
         }
 
         public void WriteToUART(String strData)
@@ -62,17 +62,12 @@ namespace LightController
                 // read the data
                 read_count = UART.Read(readBuffer, intBufferIndex, UART.BytesToRead);
 
-                // did we get a CR/LF?
-                if (readBuffer[intBufferIndex + read_count - 1] == 10 || readBuffer[intBufferIndex + read_count - 1] == 13)
+                // did we get an ending null?
+                if (readBuffer[intBufferIndex + read_count - 1] == 0)
                 {
-                    // process the data and clear the buffer
-                    // clear the CR/LF
-                    readBuffer[intBufferIndex + read_count - 1] = 0;
                     intBufferIndex = 0;
-                    String strCommand = new String(Encoding.UTF8.GetChars(readBuffer));
-                   
+                    String strCommand = new String(Encoding.UTF8.GetChars(readBuffer));                   
                     processCommand(strCommand);
-
                 }
                 else
                 {
@@ -92,14 +87,15 @@ namespace LightController
         {
             try
             {
+                Debug.Print("in processCommand, got " + strCommand);
                 strCommand = strCommand.Trim();
                 if (strCommand[1] != ':')
                 {
                     if (blnSendResponse)
                     {
                         WriteToUART("?");
-                        return false;
                     }
+                    return false;
                 }
                 char command = strCommand[0];
                 switch (command)
@@ -125,14 +121,14 @@ namespace LightController
                             if (blnSendResponse)
                             {
                                 WriteToUART("OK");
-                                return true;
                             }
+                            return true;
 
                         }
                         break;
 
                     case 'D':
-                        // format must be yy-mm-dd or yyyy-mm-dd
+                        // format must be yy-mm-dd or yyyy-mm-dd or yyyy-mm-dd hh:mm
                         string[] strDateParts = strCommand.Substring(2).Split(new char[] { ':', ' ', '.', '-' });
                         if (strDateParts.Length >= 3)
                         {
@@ -142,23 +138,40 @@ namespace LightController
                             {
                                 intYear += 2000;
                             }
+
+                            int intHours = DateTime.Now.Hour;
+                            int intMinutes = DateTime.Now.Minute;
+                            int intSeconds = DateTime.Now.Second;
+                            bool blnTimeSet = false;
+                            if (strDateParts.Length == 5)
+                            {
+                                intHours = Int32.Parse(strDateParts[3]);
+                                intMinutes = Int32.Parse(strDateParts[4]);
+                                intSeconds = 0;
+                                blnTimeSet = true;
+                            }
                            
                             DateTime currentDayTime = new DateTime(intYear, 
-                                Int16.Parse(strDateParts[1]), Int16.Parse(strDateParts[2]), DateTime.Now.Hour,
-                                DateTime.Now.Minute, DateTime.Now.Second);
+                                Int16.Parse(strDateParts[1]), Int16.Parse(strDateParts[2]), intHours,
+                                intMinutes, intSeconds);
 
 
                             Utility.SetLocalTime(currentDayTime);                            
                             Debug.Print("date is now " + DateTime.Now.Year + "-" + DateTime.Now.Month + ":" + DateTime.Now.Day);
 
                             // tell rest of application that the date has been set
-                            raiseCommand(strCommand); 
+                            raiseCommand(strCommand);
+                            if (blnTimeSet)
+                            {
+                                // raise the time event too
+                                raiseCommand("T:" + Program.Int_ToZeroPrefixedString(intHours, 2) + ":" + Program.Int_ToZeroPrefixedString(intMinutes, 2));
+                            }
 
                             if (blnSendResponse)
                             {
                                 WriteToUART("OK");
-                                return true;
                             }
+                            return true;
                         }
 
                         break;

@@ -2,7 +2,7 @@
 //#define SPARKFUN  // SparkFun Serial LCD Backpack
 //#define MICRO_LIQUID_CRYSTAL  // Parallel LCD
 #define SPARKFUN_KIT // SparkFun Serial LCD Kit
-#define NO_UART // disable use of COM port for Serial UART communication
+//#define NO_UART // disable use of COM port for Serial UART communication
 using System;
 using System.Threading;
 using System.IO.Ports;
@@ -28,7 +28,7 @@ namespace LightController
         const double MY_LONGITUDE = -79.38;
         const double MY_LATITUDE = 43.65;
         const int UTC_OFFSET = -5;
-        const bool USE_DAYLIGHT_SAVINGS = false;
+        
 
         static ILCD lcd = null;
         static clsUART uart = null;
@@ -48,6 +48,8 @@ namespace LightController
         static Timer timerButtonRed;
         static Timer timerButtonGreen;
         static Timer timerTime;
+        // DAW - 7/2/11 - upload new sensor readings via Xbee
+        static Timer timerUploadSensors; 
         static bool blnButtonHeld;
         static bool blnFahr;
         static ExtendedTimer tmrLightOn;
@@ -78,6 +80,11 @@ namespace LightController
         static int intLastHour; // hour last time we checked
         static DateTime datlastArduinoRead = DateTime.MinValue; // date and time of last data sent by Arduino
 
+        static bool blnUseDaylightSavingsTime = false;
+        static bool blnTempUpdated = false;
+        static bool blnHumidityUpdated = false;
+
+
         const int BUTTON_DELAY = 2000;
 
         static string[] strMenuItems = new string[] { "1", "Date `yy`-`MM`-`dd`", "1-1",
@@ -89,6 +96,7 @@ namespace LightController
                                               "1-1", "Day `dd`", "_UD-`dd`",
                                               "2-1", "Hour `HH`", "_UD-`HH`",
                                               "2-1", "Min `mm`", "_UD-`mm`",
+                                              "2-1", "DST `DS`", "_DST", // DAW - 5/23/11 - added Daylight Savings Time setting
                                               "3-1", "Light On `HH:mm+`", "3-2",
                                               "3-1", "Light Off `HH:mm-`", "3-3",
                                               "3-2", "Manual `HH:mm+`", "3-2-1",
@@ -121,7 +129,8 @@ namespace LightController
         const byte ADDR_YEAR = 12;
         const byte ADDR_MONTH = 13;
         const byte ADDR_DAY = 14;
-        const byte ADDR_END = 14;
+        const byte ADDR_DST = 15; // DAW - 5/23/11 - added Daylight Savings Time setting
+        const byte ADDR_END = 15;
 
         public static void Main()
         {
@@ -131,8 +140,11 @@ namespace LightController
             timerTemperature = new Timer(new TimerCallback(displayTemperature), null, 0, 30000);
             // check potentiometer every 5 seconds
             timerPot = new Timer(new TimerCallback(setLCDBrightness), null, 0, 5000);
-            // update time every second
-            timerTime = new Timer(new TimerCallback(displayTime), null, 1000, 1000);
+            // DAW - 7/2/11 - changed from 1 to 5 seconds, to free up time for Xbee handling
+            // update time every 5 seconds
+            timerTime = new Timer(new TimerCallback(displayTime), null, 5000, 5000);
+            // upload sensor readings once a minute
+            timerUploadSensors = new Timer(new TimerCallback(uploadSensorData), null, 60000, 60000);
 
             LoadSettingsFromEEPROM();
             if (lcd != null)
@@ -195,8 +207,8 @@ namespace LightController
             try
             {
 #if !NO_UART
-
-                uart = new clsUART(strUARTPort, 9600, 50, true);
+                // last parm should be true for UART terminal (to send user confirmation), but false for UART XBee
+                uart = new clsUART(strUARTPort, 9600, 512, false);
 
                 uart.Command += new CommandEventHandler(uart_Command);
 #endif
@@ -315,7 +327,9 @@ namespace LightController
                     // format is H:nn.n;nn.n, where 1st reading is humidity and 2nd is temperature
                     strParts = e.StrCommand.Split(new char[] { ';', ':' });
                     strHumidity = strParts[1];
+                    blnHumidityUpdated = true;
                     strTempDHT11 = strParts[2];
+                    blnTempUpdated = true;
                     datlastArduinoRead = DateTime.Now;
                 }
                 else if (command == 'S')
@@ -840,7 +854,7 @@ namespace LightController
 
         static void calculateSunriseAndSunset(DateTime date)
         {
-            sunCalc = new SunCalculator(MY_LONGITUDE, MY_LATITUDE, UTC_OFFSET * 15, USE_DAYLIGHT_SAVINGS);
+            sunCalc = new SunCalculator(MY_LONGITUDE, MY_LATITUDE, UTC_OFFSET * 15, blnUseDaylightSavingsTime);
             datSunset = sunCalc.CalculateSunSet(date);
             datSunrise = sunCalc.CalculateSunRise(date);
             Debug.Print("sunrise is " + datSunrise + " sunset is " + datSunset);
@@ -858,6 +872,8 @@ namespace LightController
                 setLightTime(datLightOn.ToString("HH:mm"), true);
                 // set light to turn off at 11 pm
                 setLightTime("23:00", false);
+                // DAW - 6/12/11 - fix bug where light timer is set for tomorrow after date is set through UART
+                checkTimers();
             }
         }
 
@@ -898,6 +914,19 @@ namespace LightController
                     if (strKeywords[i] == "LB")
                     {
                         if (blnBacklight)
+                        {
+                            strKeywords[i] = "On";
+                        }
+                        else
+                        {
+                            strKeywords[i] = "Off";
+                        }
+                        continue;
+                    }
+                    if (strKeywords[i] == "DS")
+                    {
+
+                        if (blnUseDaylightSavingsTime)
                         {
                             strKeywords[i] = "On";
                         }
@@ -1110,6 +1139,21 @@ namespace LightController
                 tmrLightOff.Dispose();
                 tmrLightOff = null;
             }
+                // DAW - 5/23/11 - added Daylight Savings Time setting
+            else if (menuCode == "_DST")
+            {
+                // toggle DST
+                blnUseDaylightSavingsTime = !blnUseDaylightSavingsTime;
+                calculateSunriseAndSunset(DateTime.Now);
+                if (blnUseDaylightSavingsTime)
+                {
+                    SaveSettingToEEPROM(ADDR_DST, 2);
+                }
+                else
+                {
+                    SaveSettingToEEPROM(ADDR_DST, 1);
+                }
+            }  else
             {
                 string[] strParts = menuCode.Split(new char[] { '`' });
                 // first part is probably UD_, but we actually only care about the format code
@@ -1191,7 +1235,7 @@ namespace LightController
             menu = new clsLCDMenu(strMenuItems, lcd, buttonGreen, buttonRed, getStringForMenu, getValuesForMenu, setValueFromMenu);
         }
 
-        static string Int_ToZeroPrefixedString(int intValue, int intOutLen)
+        public static string Int_ToZeroPrefixedString(int intValue, int intOutLen)
         {
             string strValue = new string('0', intOutLen) + intValue;
             return strValue.Substring(strValue.Length - intOutLen);
@@ -1328,7 +1372,19 @@ namespace LightController
                             blnFahr = false;
                         }
                         break;
-  
+                    // DAW - 5/23/11 - add support for Daylight Savings Time setting
+                case ADDR_DST:
+                        if (value == 1)
+                        {
+                            blnUseDaylightSavingsTime = false;
+                            calculateSunriseAndSunset(DateTime.Now);
+                        }
+                        else if (value == 2)
+                        {
+                            blnUseDaylightSavingsTime = true;
+                            calculateSunriseAndSunset(DateTime.Now);
+                        }
+                        break;
                     default:
                         Debug.Print("unknown address  in handleSetting: " + address);
                         break;
@@ -1400,6 +1456,25 @@ namespace LightController
                 }
             }
 
+        }
+
+        // DAW - 7/2/11 - new method to upload sensor data through XBee
+        private static void uploadSensorData(object data)
+        {
+            string strReading = "";
+            if (blnHumidityUpdated)
+            {
+                blnHumidityUpdated = false;
+                // make copy of humidity reading, since it could be overwritten at any time
+                strReading += "H1:" + strHumidity + "\r\n";
+            }
+            if (blnTempUpdated)
+            {
+                blnTempUpdated = false;
+                // make copy of temperature reading, since it could be overwritten at any time
+                strReading += "T1:" + strTempDHT11 + "\r\n";
+            }
+            uart.WriteToUART(strReading);
         }
 
     }

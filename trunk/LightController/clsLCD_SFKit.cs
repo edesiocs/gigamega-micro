@@ -34,7 +34,7 @@ namespace LightController
             {
                 // read the data
                 intBytesRead = lcd.Read(readBuffer, intBufferOffset, lcd.BytesToRead);
-                Debug.Print("in UART_DataReceived: " + intBytesRead);
+                Debug.Print("in lcd_DataReceived: " + intBytesRead);
                 if (intBytesRead == 0 || readBuffer[intBufferOffset + intBytesRead - 1] != 0x0a)
                 {
                     // only got a partial command, so append whatever comes next to this partial command
