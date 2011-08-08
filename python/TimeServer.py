@@ -3,6 +3,7 @@ import serial, time, datetime, sys, string
 
 LOGFILENAME = "controller.txt"   # where we will store our flatfile data
 SERIALPORT = "/dev/ttyUSB0"    # the com/serial port the XBee is connected to
+## NOTE - for Windows COM port, format is SERIALPORT = \\.\COMxx
 BAUDRATE = 9600      # the baud rate we talk to the xbee
 TIMEOUT = 3
 DEBUG = False
@@ -63,13 +64,15 @@ if LOGFILENAME:
         logfile.write("Started logging\n");
         logfile.flush()
 
-LogMsg("TimeServer.py version 060411 started")
+LogMsg("TimeServer.py version 080711 started")
 
 try:
     ser = serial.Serial(SERIALPORT, BAUDRATE, timeout=TIMEOUT)
+    ser.close() # workaround for known problem when running on Windows
     ser.open()
 except:
-     sys.exit("No serial port found on " + SERIALPORT + ". See ya.")
+    print "Unable to open serial port ", SERIALPORT, ". See ya."
+    sys.exit(1)
 
 lastMin = -1
 displayTime()
