@@ -17,7 +17,6 @@ USBPORT = ""  # the serial port ID that the micro is directly connected to
 XBEEPORT = "" # the serial port ID the XBee is connected to
 serUSB = None # USB serial port object
 serXBee = None # XBee serial port object
-serDisplays = [] # display serial port objects
 xbee = None
 BAUDRATE = 9600     # Baud rate for XBee communications
 TIMEOUT = 3         # serial port timeout in seconds
@@ -44,30 +43,6 @@ def LogMsg(message, comment=False):
             logfile.flush()
     except:
         print "Error in LogMsg: ", message
-
-def sendToDisplay(siteconfig):
-    try:
-        # build display buffer containing sensor values
-        sensorValues = siteconfig["_SENSORVALUES"]
-        display = ""
-        if (len(sensorValues) > 0):
-            for key in sensorValues:
-                if key[0] != '_':
-                    # round to 1 decimal place
-                    data = ("%.1f" % sensorValues[key][1]).rstrip('0').rstrip('.')
-                    datetime = sensorValues[key][2].strftime("%m/%d %H:%M")
-                    display += siteconfig[key] + ": " + data + "- " + datetime + "\r\n"
-            # strip off ending CR/LF
-            display = display[0:len(display)-2]
-        else:
-            display = "No data!"
-        # send display buffer
-        sendDisplayCommand(siteconfig["_SER"], "B0", display)            
-
-        
-    except:
-        log.exception('Error in sendToDisplay')
-        return False
 
 def sendToPachube(dataPoint, floatValue, siteconfig):
     try:
@@ -129,7 +104,6 @@ def sendToNimbits(dataPoint, floatValue, siteconfig):
         log.exception('Error sending to nimbits, site ' + siteconfig["NIMBITS_SERVER"] + ', datapoint ' + dataPoint);
         return False
 
-
 def processSensorSite(sensor, float_value, siteconfig):
     try:
         if DEBUG:
@@ -144,14 +118,10 @@ def processSensorSite(sensor, float_value, siteconfig):
             # add this reading to the sensor's list
             sensorValues = siteconfig["_SENSORVALUES"]
             if sensor in sensorValues:
-                if siteconfig["_TYPE"] == "D":
-                    # for display, only keep track of most recent sensor reading
-                    sensorValues[sensor] = [1, float_value, datetime.datetime.now()]
-                else:                    
-                    sensorValues[sensor][0] = sensorValues[sensor][0] + 1
-                    sensorValues[sensor][1] = sensorValues[sensor][1] + float_value
-                    if DEBUG:
-                        print "found sensorValue", sensor, sensorValues[sensor]
+                sensorValues[sensor][0] = sensorValues[sensor][0] + 1
+                sensorValues[sensor][1] = sensorValues[sensor][1] + float_value
+                if DEBUG:
+                    print "found sensorValue", sensor, sensorValues[sensor]
             else:
                 sensorValues[sensor] = [1, float_value, datetime.datetime.now()]
                 if DEBUG:
@@ -160,11 +130,7 @@ def processSensorSite(sensor, float_value, siteconfig):
             if DEBUG:
                 print "sensorValues:", sensorValues[sensor]
                 # print "time since last update", datetime.datetime.now() - sensorValues[sensor][2]
-            if siteconfig["_TYPE"] == "D":
-                # the display is always updated with all sensor readings, not just the current sensor
-                timeSinceLastUpload = datetime.datetime.now() - sensorValues["_LASTUPDATE"][2]
-            else:                
-                timeSinceLastUpload = datetime.datetime.now() - sensorValues[sensor][2]
+            timeSinceLastUpload = datetime.datetime.now() - sensorValues[sensor][2]
             if DEBUG:
                 print "seconds since last update: ",  timeSinceLastUpload.seconds, "upload interval", uploadInterval
             if timeSinceLastUpload.seconds >= uploadInterval:
@@ -175,18 +141,11 @@ def processSensorSite(sensor, float_value, siteconfig):
                     sent = sendToNimbits(dataPoint, sensorValues[sensor][1]/ sensorValues[sensor][0], siteconfig)
                 elif siteconfig["_TYPE"] == "P":
                     sent = sendToPachube(dataPoint, sensorValues[sensor][1]/ sensorValues[sensor][0], siteconfig)
-                elif siteconfig["_TYPE"] == "D":
-                    sendToDisplay(siteconfig);
-                    sent = False # don't clear the sensor reading in the Display list
                 if sent:
                     sensorValues[sensor][0] = 0
                     sensorValues[sensor][1] = 0
-                    
-                if siteconfig["_TYPE"] == "D":
-                    # the display is always updated with all sensor readings, not just the current sensor
-                    sensorValues["_LASTUPDATE"][2] = datetime.datetime.now()
-                else:
-                    sensorValues[sensor][2] = datetime.datetime.now() # will set "time last uploaded" even if upload failed to avoid excessive uploads
+
+                sensorValues[sensor][2] = datetime.datetime.now() # will set "time last uploaded" even if upload failed to avoid excessive uploads
             return True
         else:
             if DEBUG:
@@ -333,37 +292,15 @@ def sendUSBCommand(strPrefix, strCommand):
     except:
         log.exception('sendUSBCommand: ' + strPrefix + ':' + strCommand);
 
-def sendDisplayCommand(ser, strPrefix, strCommand):
-    try:
-        if len(strCommand) > 100:
-            ser.write(strPrefix + ":" + strCommand[:100])
-            time.sleep(3) # give recipient time to catch up
-            ser.write(strCommand[100:] + chr(0))
-        else:
-            ser.write(strPrefix + ":" + strCommand + chr(0))
-            #print "bytes sent to display: ",  written, " data len ", len(strCommand) + len(strPrefix) + 1
-        ser.flush()
-
-    except:
-        log.exception('sendDisplayCommand: ' + strPrefix + ':' + strCommand);        
-
 
 def sendDateTime():
     try:
         timeStr = time.strftime("%Y-%m-%d %H:%M")
         sendXBeeCommand("D", timeStr);
-        sendUSBCommand("D", timeStr)
-        for ser in serDisplays:
-            sendDisplayCommand(ser, "S0", timeStr)
+        sendUSBCommand("D", timeStr);
         print "sendDateTime: " + timeStr
     except:
         log.exception('sendDateTime');
-
-def readDisplayData():
-    for ser in serDisplays:
-        data = ser.read(100)
-        if data:
-            print data
 
 
 def mainloop():
@@ -371,7 +308,6 @@ def mainloop():
     while 1==1:
         try:
             readUSBData()
-            readDisplayData()
             if SENDTIME:
                 currTime = datetime.datetime.now()
                 currMin = currTime.minute
@@ -423,28 +359,7 @@ def readConfigFile():
                         #                    <total of readings since last update>,
                         #                    <date/time of last upload>]
                         settings["_SENSORVALUES"] = { }
-                        if "USBPORT" in settings:
-                            try:
-                                settings["_TYPE"] = "D"
-                                # _LASTUPDATE isn't really a sensor type, just a placeholder for the last time the display was updated
-                                settings["_SENSORVALUES"]["_LASTUPDATE"] = [0, 0, datetime.datetime.now()]
-                                try:
-                                    serDisplay = serial.Serial(settings["USBPORT"], BAUDRATE, timeout=TIMEOUT)
-                                    serDisplay.close() # workaround for known problem when running on Windows
-                                    serDisplay.open()
-                                    print "Display enabled for " + settings["USBPORT"]
-                                    settings["_SER"] = serDisplay
-                                    serDisplays.append(serDisplay);
-                                    config["_SITE" + str(numSites)] = settings
-                                    numSites += 1
-                                except:
-                                    print "Unable to open Display port ", settings["USBPORT"]
-                                    log.exception('Unable to open Display port ' + USBPORT);
-                                    # keep going, but without this display
-                            except:
-                                print "ERROR - unable to initialize Display", settings["_SITE"], " -- site skipped"
-                                log.exception("Unable to initialize Display " +  settings["_SITE"]);
-                        elif "PACHUBE_FEED_ID" in settings:
+                        if "PACHUBE_FEED_ID" in settings:
                             try:
                                 settings["_TYPE"] = "P"
                                 #pac = eeml.Pachube(settings["PACHUBE_FEED_ID"], settings["PACHUBE_API_KEY"])
@@ -455,12 +370,13 @@ def readConfigFile():
                             except:
                                 print "ERROR - unable to create object for Pachube feed in site " + site + " -- site skipped"
                                 log.exception('ERROR!');
-                        elif "NIMBITS_SERVER" in settings:
+                        else:
+                            if "NIMBITS_SERVER" in settings:
                                 settings["_TYPE"] = "N"
                                 config["_SITE" + str(numSites)] = settings
                                 numSites += 1
-                        else:
-                            print "ERROR - invalid settings for site " + site + " -- site skipped"
+                            else:
+                                print "ERROR - invalid settings for site " + site + " -- site skipped"
 
                 else:
                     # global entry in config file
@@ -486,7 +402,7 @@ def processConfig():
         if "SENDTIME" in config:
             SENDTIME = config["SENDTIME"]
         if "LOGDATA" in config:
-            LOGDATA = config["LOGDATA"]            
+            LOGDATA = config["LOGDATA"]
 
         if DEBUG:
             print "config file settings:"
@@ -516,7 +432,7 @@ if LOGFILENAME:
         logfile.write("Started logging\n");
         logfile.flush()
 
-LogMsg("SensorRelay.py version 102311 started", comment=True)
+LogMsg("SensorRelay.py version 100811 started", comment=True)
 
 if USBPORT:
     try:
@@ -527,7 +443,6 @@ if USBPORT:
         print "Unable to open USB port ", USBPORT, ". See ya."
         log.exception('usb port ' + USBPORT);
         sys.exit(1)
-    
 
 if XBEEPORT:
     try:
