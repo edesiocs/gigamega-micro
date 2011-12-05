@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8" ?> 
+
+<Module>
+  <ModulePrefs 
+  title="gmPachube" 
+  description="Customizable graph of Pachube datastreams.  For more info, see http://gigamegatech.com/2011/11/05/a-pachube-google-gadget-size-matters/" 
+  author="Dan Watts"
+  author_email="gigamegawatts+feedback@gmail.com"
+  screenshot="http://www.gigamegablog.com/gadgets/gmPachube.PNG"
+  scrolling="true"
+  singleton="false"
+  title_url="http://__UP_serverName__"
+  >
+  <Require feature="settitle"/>
+  <Require feature="views" /> 
+  <Require feature="dynamic-height"/>
+  </ModulePrefs> 
+   
+ <UserPref name="feedID" display_name="Feed #" datatype="string" default_value=""  required="true" />    
+  <UserPref name="datastreams" display_name = "Datastreams (leave blank for all)" datatype="list" required="false"/> 
+  <UserPref name="timeSpan" display_name = "Time Span" datatype="string" default_value="24" required="true"/>
+  <UserPref name="spanType" display_name = "Time Span Units " datatype="enum" default_value="Hours">
+    <EnumValue value="hours"/>
+    <EnumValue value="days"/>
+    <EnumValue value="weeks"/>
+   <EnumValue value="months"/>
+  </UserPref>
+  <UserPref name="displayStatus" display_name="Show Status" datatype="bool" default_value="false"/>
+  <UserPref name="detailedGrid" display_name="Detailed Grid" datatype="bool" default_value="false"/>
+  <UserPref name="axisLabels" display_name="Axis Labels" datatype="bool" default_value="false"/>
+  <UserPref name="graphWidth" display_name = "Graph Width" datatype="string" default_value="280" required="true"/>  
+  <UserPref name="graphHeight" display_name = "Graph Height" datatype="string" default_value="100" required="true"/>
+  <UserPref name="gadgetHeight" display_name = "Gadget Height" datatype="string" default_value="200"/>
+  <!-- Disabled - dependent on timing of arrival of graph PNGS <UserPref name="autoSizeGadget" display_name="Autosize gadget" datatype="bool" default_value="false"/> -->
+  <!--<UserPref name="timeZone" display_name = "Timezone code" datatype="string" default_value="" required="false"/>-->
+  <UserPref name="timeZone" display_name = "Time zone" datatype="enum" default_value="UTC">
+    <EnumValue value="International Date Line West" display_value="Intl Date Line West [UTC -11]"/>
+    <EnumValue value="Midway Island" display_value="Midway Island [UTC -11]"/>
+    <EnumValue value="Samoa" display_value="Samoa [UTC -11]"/>
+    <EnumValue value="Hawaii" display_value="Hawaii [UTC -10]"/>
+    <EnumValue value="Alaska" display_value="Alaska [UTC -9]"/>
+    <EnumValue value="Pacific Time (US and Canada)" display_value="Pacific (US and Canada) [UTC -8]"/>
+    <EnumValue value="Tijuana" display_value="Tijuana [UTC -7]"/>
+    <EnumValue value="Arizona" display_value="Arizona [UTC -7]"/>
+    <EnumValue value="Chihuahua" display_value="Chihuahua [UTC -7]"/>
+    <EnumValue value="Mazatlan" display_value="Mazatlan [UTC -7]"/>
+    <EnumValue value="Mountain Time (US and Canada)" display_value="Mountain (US and Canada) [UTC -7]"/>
+    <EnumValue value="Central America" display_value="Central America [UTC -6]"/>
+    <EnumValue value="Central Time (US and Canada)" display_value="Central (US and Canada) [UTC -6]"/>
+    <EnumValue value="Guadalajara" display_value="Guadalajara [UTC -6]"/>
+    <EnumValue value="Mexico City" display_value="Mexico City [UTC -6]"/>
+    <EnumValue value="Monterrey" display_value="Monterrey [UTC -6]"/>
+    <EnumValue value="Saskatchewan" display_value="Saskatchewan [UTC -6]"/>
+    <EnumValue value="Bogota" display_value="Bogota [UTC -5]"/>
+    <EnumValue value="Eastern Time (US and Canada)" display_value="Eastern (US and Canada) [UTC -5]"/>
+    <EnumValue value="Indiana (East)" display_value="Indiana (East) [UTC -5]"/>
+    <EnumValue value="Lima" display_value="Lima [UTC -5]"/>
+    <EnumValue value="Quito" display_value="Quito [UTC -5]"/>
+    <EnumValue value="Caracas" display_value="Caracas [UTC -4.5]"/>
+    <EnumValue value="Atlantic Time (Canada)" display_value="Atlantic (Canada) [UTC -4]"/>
+    <EnumValue value="La Paz" display_value="La Paz [UTC -4]"/>
+    <EnumValue value="Santiago" display_value="Santiago [UTC -4]"/>
+    <EnumValue value="Newfoundland" display_value="Newfoundland [UTC -3.5]"/>
+    <EnumValue value="Brasilia" display_value="Brasilia [UTC -3]"/>
+    <EnumValue value="Buenos Aires" display_value="Buenos Aires [UTC -3]"/>
+    <EnumValue value="Georgetown" display_value="Georgetown [UTC -3]"/>
+    <EnumValue value="Greenland" display_value="Greenland [UTC -3]"/>
+    <EnumValue value="Mid-Atlantic" display_value="Mid-Atlantic [UTC -2]"/>
+    <EnumValue value="Azores" display_value="Azores [UTC -1]"/>
+    <EnumValue value="Cape Verde Is." display_value="Cape Verde Is. [UTC -1]"/>
+    <EnumValue value="Casablanca" display_value="Casablanca [UTC +0]"/>
+    <EnumValue value="Dublin" display_value="Dublin [UTC +0]"/>
+    <EnumValue value="Edinburgh" display_value="Edinburgh [UTC +0]"/>
+    <EnumValue value="Lisbon" display_value="Lisbon [UTC +0]"/>
+    <EnumValue value="London" display_value="London [UTC +0]"/>
+    <EnumValue value="Monrovia" display_value="Monrovia [UTC +0]"/>
+    <EnumValue value="UTC" display_value="UTC"/>
+    <EnumValue value="Amsterdam" display_value="Amsterdam [UTC +1]"/>
+    <EnumValue value="Belgrade" display_value="Belgrade [UTC +1]"/>
+    <EnumValue value="Berlin" display_value="Berlin [UTC +1]"/>
+    <EnumValue value="Bern" display_value="Bern [UTC +1]"/>
+    <EnumValue value="Bratislava" display_value="Bratislava [UTC +1]"/>
+    <EnumValue value="Brussels" display_value="Brussels [UTC +1]"/>
+    <EnumValue value="Budapest" display_value="Budapest [UTC +1]"/>
+    <EnumValue value="Copenhagen" display_value="Copenhagen [UTC +1]"/>
+    <EnumValue value="Ljubljana" display_value="Ljubljana [UTC +1]"/>
+    <EnumValue value="Madrid" display_value="Madrid [UTC +1]"/>
+    <EnumValue value="Paris" display_value="Paris [UTC +1]"/>
+    <EnumValue value="Prague" display_value="Prague [UTC +1]"/>
+    <EnumValue value="Rome" display_value="Rome [UTC +1]"/>
+    <EnumValue value="Sarajevo" display_value="Sarajevo [UTC +1]"/>
+    <EnumValue value="Skopje" display_value="Skopje [UTC +1]"/>
+    <EnumValue value="Stockholm" display_value="Stockholm [UTC +1]"/>
+    <EnumValue value="Vienna" display_value="Vienna [UTC +1]"/>
+    <EnumValue value="Warsaw" display_value="Warsaw [UTC +1]"/>
+    <EnumValue value="West Central Africa" display_value="West Central Africa [UTC +1]"/>
+    <EnumValue value="Zagreb" display_value="Zagreb [UTC +1]"/>
+    <EnumValue value="Athens" display_value="Athens [UTC +2]"/>
+    <EnumValue value="Bucharest" display_value="Bucharest [UTC +2]"/>
+    <EnumValue value="Cairo" display_value="Cairo [UTC +2]"/>
+    <EnumValue value="Harare" display_value="Harare [UTC +2]"/>
+    <EnumValue value="Helsinki" display_value="Helsinki [UTC +2]"/>
+    <EnumValue value="Istanbul" display_value="Istanbul [UTC +2]"/>
+    <EnumValue value="Jerusalem" display_value="Jerusalem [UTC +2]"/>
+    <EnumValue value="Kyev" display_value="Kyev [UTC +2]"/>
+    <EnumValue value="Minsk" display_value="Minsk [UTC +2]"/>
+    <EnumValue value="Pretoria" display_value="Pretoria [UTC +2]"/>
+    <EnumValue value="Riga" display_value="Riga [UTC +2]"/>
+    <EnumValue value="Sofia" display_value="Sofia [UTC +2]"/>
+    <EnumValue value="Tallinn" display_value="Tallinn [UTC +2]"/>
+    <EnumValue value="Vilnius" display_value="Vilnius [UTC +2]"/>	
+    <EnumValue value="Baghdad" display_value="Baghdad [UTC +3]" />
+    <EnumValue value="Kuwait" display_value="Kuwait [UTC +3]" />
+    <EnumValue value="Moscow" display_value="Moscow [UTC +3]" />
+    <EnumValue value="Nairobi" display_value="Nairobi [UTC +3]" />
+    <EnumValue value="Riyadh" display_value="Riyadh [UTC +3]" />
+    <EnumValue value="St. Petersburg" display_value="St. Petersburg [UTC +3]" />
+    <EnumValue value="Volgograd" display_value="Volgograd [UTC +3]" />
+    <EnumValue value="Tehran" display_value="Tehran [UTC +3.5]" />
+    <EnumValue value="Abu Dhabi" display_value="Abu Dhabi [UTC +4]" />
+    <EnumValue value="Baku" display_value="Baku [UTC +4]" />
+    <EnumValue value="Muscat" display_value="Muscat [UTC +4]" />
+    <EnumValue value="Tbilisi" display_value="Tbilisi [UTC +4]" />
+    <EnumValue value="Yerevan" display_value="Yerevan [UTC +4]" />
+    <EnumValue value="Kabul" display_value="Kabul [UTC +5]" />
+    <EnumValue value="Ekaterinburg" display_value="Ekaterinburg [UTC +5]" />
+    <EnumValue value="Islamabad" display_value="Islamabad [UTC +5]" />
+    <EnumValue value="Karachi" display_value="Karachi [UTC +5]" />
+    <EnumValue value="Tashkent" display_value="Tashkent [UTC +5]" />
+    <EnumValue value="Chennai" display_value="Chennai [UTC +5.5]" />
+    <EnumValue value="Kolkata" display_value="Kolkata [UTC +5.5]" />
+    <EnumValue value="Mumbai" display_value="Mumbai [UTC +5.5]" />
+    <EnumValue value="New Delhi" display_value="New Delhi [UTC +5.5]" />
+    <EnumValue value="Sri Jayawardenepura" display_value="Sri Jayawardenepura [UTC +5.5]" />
+    <EnumValue value="Kathmandu" display_value="Kathmandu [UTC +5.75]" />
+    <EnumValue value="Almaty" display_value="Almaty [UTC +6]" />
+    <EnumValue value="Astana" display_value="Astana [UTC +6]" />
+    <EnumValue value="Dhaka" display_value="Dhaka [UTC +6]" />
+    <EnumValue value="Novosibirsk" display_value="Novosibirsk [UTC +6]" />
+    <EnumValue value="Rangoon" display_value="Rangoon [UTC +6.5]" />
+    <EnumValue value="Bangkok" display_value="Bangkok [UTC +7]" />
+    <EnumValue value="Hanoi" display_value="Hanoi [UTC +7]" />
+    <EnumValue value="Jakarta" display_value="Jakarta [UTC +7]" />
+    <EnumValue value="Krasnoyarsk" display_value="Krasnoyarsk [UTC +7]" />
+    <EnumValue value="Beijing" display_value="Beijing [UTC +8]" />
+    <EnumValue value="Chongqing" display_value="Chongqing [UTC +8]" />
+    <EnumValue value="Hong Kong" display_value="Hong Kong [UTC +8]" />
+    <EnumValue value="Irkutsk" display_value="Irkutsk [UTC +8]" />
+    <EnumValue value="Kuala Lumpur" display_value="Kuala Lumpur [UTC +8]" />
+    <EnumValue value="Perth" display_value="Perth [UTC +8]" />
+    <EnumValue value="Singapore" display_value="Singapore [UTC +8]" />
+    <EnumValue value="Taipei" display_value="Taipei [UTC +8]" />
+    <EnumValue value="Ulaan Bataar" display_value="Ulaan Bataar [UTC +8]" />
+    <EnumValue value="Urumqi" display_value="Urumqi [UTC +8]" />
+    <EnumValue value="Osaka" display_value="Osaka [UTC +9]" />
+    <EnumValue value="Sapporo" display_value="Sapporo [UTC +9]" />
+    <EnumValue value="Seoul" display_value="Seoul [UTC +9]" />
+    <EnumValue value="Tokyo" display_value="Tokyo [UTC +9]" />
+    <EnumValue value="Yakutsk" display_value="Yakutsk [UTC +9]" />
+    <EnumValue value="Adelaide" display_value="Adelaide [UTC +9.5]" />
+    <EnumValue value="Darwin" display_value="Darwin [UTC +9.5]" />
+    <EnumValue value="Brisbane" display_value="Brisbane [UTC +10]" />
+    <EnumValue value="Canberra" display_value="Canberra [UTC +10]" />
+    <EnumValue value="Guam" display_value="Guam [UTC +10]" />
+    <EnumValue value="Hobart" display_value="Hobart [UTC +10]" />
+    <EnumValue value="Melbourne" display_value="Melbourne [UTC +10]" />
+    <EnumValue value="Port Moresby" display_value="Port Moresby [UTC +10]" />
+    <EnumValue value="Sydney" display_value="Sydney [UTC +10]" />
+    <EnumValue value="Vladivostok" display_value="Vladivostok [UTC +10]" />
+    <EnumValue value="Magadan" display_value="Magadan [UTC +11]" />
+    <EnumValue value="New Caledonia" display_value="New Caledonia [UTC +11]" />
+    <EnumValue value="Solomon Is." display_value="Solomon Is. [UTC +11]" />
+    <EnumValue value="Auckland" display_value="Auckland [UTC +12]" />
+    <EnumValue value="Fiji" display_value="Fiji [UTC +12]" />
+    <EnumValue value="Kamchatka" display_value="Kamchatka [UTC +12]" />
+    <EnumValue value="Marshall Is." display_value="Marshall Is. [UTC +12]" />
+    <EnumValue value="Wellington" display_value="Wellington [UTC +12]" />
+    <EnumValue value="Nuku'alofa" display_value="Nuku'alofa [UTC +13]" />	
+  </UserPref>	
+  <Content type="html" view="home">
+  <![CDATA[
+   <div id="content_div"></div>
+   <style type="text/css">
+    .error {
+		color:#FF0000;
+		font-weight: bold;
+	}
+	.dp_header {
+		font-size: 0.8em;
+		text-align: center;
+		font-weight: bold;
+	}
+	</style>
+	<script src="http://www.gigamegablog.com/gadgets/gm-pachube.js" type="text/javascript"></script>
+  ]]>
+  </Content>
+  <Content type="html" view="canvas">
+  <![CDATA[
+   <div id="content_div"></div>
+   <style type="text/css">
+    .error {
+		color:#FF0000;
+		font-weight: bold;
+	}
+	.dp_header {
+		font-size: 0.8em;
+		text-align: center;
+		font-weight: bold;
+	}
+	</style>
+	<script src="http://www.gigamegablog.com/gadgets/gm-pachube.js" type="text/javascript"></script>
+  ]]>
+  </Content>  
+</Module>

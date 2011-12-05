@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?> 
+
+<Module>
+  <ModulePrefs 
+  title="Nimbits" 
+  description="Displays graph of Nimbits Data Points" 
+  author="Dan Watts"
+  author_email="gigamegawatts+feedback@gmail.com"
+  screenshot="http://www.gigamegablog.com/gadgets/NimbitsGadgetScreenshot.png"
+  thumbnail="http://www.gigamegablog.com/gadgets/NimbitsGadgetThumbnail.png"
+  scrolling="true"
+  singleton="false"
+  title_url="http://__UP_serverName__"
+  >
+  <Require feature="settitle"/>
+  <Require feature="views" /> 
+  </ModulePrefs> 
+   
+ <UserPref name="serverName" 
+  display_name="Server" 
+  datatype="string" default_value="app.nimbits.com"  required="true" />      
+  <UserPref name="dataPoints1" display_name = "Data Pts 1" datatype="list" required="true"/>
+  <UserPref name="displayGraph2" display_name="Graph 2?" datatype="bool" default_value="false"/>
+  <UserPref name="dataPoints2" display_name = "Data Pts 2" datatype="list"/>
+  <UserPref name="displayGraph3" display_name="Graph 3?" datatype="bool" default_value="false"/>
+  <UserPref name="dataPoints3" display_name = "Data Pts 3" datatype="list"/>  
+  <UserPref name="userEmail" display_name="Your Email" datatype="string" required="false" />  
+  <UserPref name="timeSpan" display_name = "Time Span" datatype="string" default_value="24" required="true"/>
+  <UserPref name="spanType" display_name = "Time Span Units " datatype="enum" default_value="Hours">
+  <EnumValue value="Hours"/>
+  <EnumValue value="Readings"/>
+  </UserPref>
+  <UserPref name="displayLegend" display_name="Legend" datatype="bool" default_value="true"/>
+  <UserPref name="gridStyle" display_name="Grid Style" datatype="enum" default_value="None">
+  <EnumValue value="None"/>
+  <EnumValue value="Vertical"/>
+  <EnumValue value="Horiz"/>
+  <EnumValue value="Both"/>
+  </UserPref>
+  <UserPref name="graphHeight" display_name = "Graph Height" datatype="string" default_value="200" required="true"/>
+  <UserPref name="displayStatus" display_name="Show Status" datatype="bool" default_value="false"/>
+  <Content type="html" view="home">
+  <![CDATA[
+   <div id="content_div"></div>
+   <style type="text/css">
+    .error {
+		color:#FF0000;
+		font-weight: bold;
+	}
+	.dp_header {
+		font-size: 0.8em;
+		text-align: center;
+		font-weight: bold;
+	}
+	</style>
+	<script src="http://www.gigamegablog.com/gadgets/nimbits.js" type="text/javascript"></script>
+  ]]>
+  </Content>
+  <Content type="html" view="canvas">
+  <![CDATA[
+   <div id="content_div"></div>
+   <style type="text/css">
+    .error {
+		color:#FF0000;
+		font-weight: bold;
+	}
+	.dp_header {
+		font-size: 0.8em;
+		text-align: center;
+		font-weight: bold;
+	}
+	</style>
+	<script src="http://www.gigamegablog.com/gadgets/nimbits.js" type="text/javascript"></script>
+  ]]>
+  </Content>  
+</Module>
