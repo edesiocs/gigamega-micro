@@ -14,6 +14,7 @@
   >
   <Require feature="settitle"/>
   <Require feature="views" /> 
+  <Require feature="dynamic-height"/>
   </ModulePrefs> 
    
  <UserPref name="serverName" 
@@ -37,8 +38,11 @@
   <EnumValue value="Horiz"/>
   <EnumValue value="Both"/>
   </UserPref>
-  <UserPref name="graphHeight" display_name = "Graph Height" datatype="string" default_value="200" required="true"/>
-  <UserPref name="displayStatus" display_name="Show Status" datatype="bool" default_value="false"/>
+   <UserPref name="displayStatus" display_name="Show Status" datatype="bool" default_value="false"/>
+  <UserPref name="graphHeight" display_name = "Graph Height" datatype="string" default_value="100" required="true"/>
+  <UserPref name="graphWidth" display_name = "Graph Width" datatype="string" default_value="280" required="true"/>
+  <UserPref name="gadgetHeight" display_name = "Gadget Height" datatype="string" default_value="200" required="true"/>
+ 
   <Content type="html" view="home">
   <![CDATA[
    <div id="content_div"></div>
