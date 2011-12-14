@@ -1,4 +1,4 @@
-// Last updated: Dec 3 2011
+// Last updated: Dec 5 2011
  
    // Get userprefs
    var prefs = new gadgets.Prefs();
@@ -80,6 +80,12 @@
 		return stringToTrim.replace(/^\s+|\s+$/g,"");
 	}	
 	
+   // NOTE - the following isNumber function is taken from StackOverflow: http://stackoverflow.com/questions/18082/validate-numbers-in-javascript-isnumeric/1830844#1830844
+    function isNumber(n) 
+    {
+        return !isNaN(parseFloat(n)) && isFinite(n);
+    }
+	
 	// NOTE: parm consists of 3 properties:
 	//  data: JSON data, or null if something went wrong
 	// error: null, or HTTP error if something went wrong
@@ -105,11 +111,22 @@
 				var value = jsondata[key];
 				alldata += key + ":" + value + ", ";
 			 }
-			 // DAW - 8/17/11 - changed handling of timestamp property: format was changed by GAE or GG API to add blank after time (e.g. "2011-08-17T13:58:05 +0000")
-			//  The following will work if the delimiters change, provided that the order of the date fields remains the same
-			var matches = jsondata['timestamp'].match(/\d+/g); // use regular expression to extract the numbers
-			// NOTE that the Date constructor expects month to be 0-11
-			var date1 = new Date(Date.UTC(matches[0], matches[1] - 1, matches[2], matches[3], matches[4], matches[5]));
+
+			 var date1;
+
+			// 12/4/11 - detect and convert date and time in Unix Epoch format
+			if (isNumber(jsondata['timestamp']))
+			{
+				// assume it is milliseconds in Unix Epoch time
+				date1 = new Date(jsondata['timestamp']);
+			} else
+			{
+				 // DAW - 8/17/11 - changed handling of timestamp property: format was changed by GAE or GG API to add blank after time (e.g. "2011-08-17T13:58:05 +0000")
+				//  The following will work if the delimiters change, provided that the order of the date fields remains the same
+				var matches = jsondata['timestamp'].match(/\d+/g); // use regular expression to extract the numbers
+				// NOTE that the Date constructor expects month to be 0-11
+				date1 = new Date(Date.UTC(matches[0], matches[1] - 1, matches[2], matches[3], matches[4], matches[5]));
+			}
 
 			 // retrieve values as local time
 			 //var dateAndTime = date1.getMonth() + "/" + date1.getDate() + " " + date1.getHours() + ":" + date1.getMinutes();
@@ -273,8 +290,15 @@
 			return;
 		}
 		
-
-		var graphWidth = 320; // in normal gadget mode, 320 is the recommended width
+        // 12/5/11 - replace hard-coded graph width with user setting
+		//var graphWidth = 320; // in normal gadget mode, 320 is the recommended width
+        var graphWidth = prefs.getInt("graphWidth");
+        
+        if (!isNumber(graphWidth) || (graphWidth <= 0))
+        {
+            // if not set, use old default for backwards compatibility
+            graphWidth = 320;
+        }
 		// in canvas mode, double the graph size
 		if (gadgets.views.getCurrentView().getName() == "CANVAS")
 		{
@@ -369,6 +393,19 @@
 		}
 		console.log("Nimbits Gadget: chart html is " + html);
 		element.innerHTML = html;
+        
+        // 12/5/11 - support gadget height setting
+        if (gadgets.views.getCurrentView().getName() !== "CANVAS")
+        {
+            var gadgetHeight = prefs.getInt("gadgetHeight");
+            if (isNumber(gadgetHeight))
+            {
+                gadgets.window.adjustHeight(gadgetHeight);
+            } else
+            {
+                gadgets.window.adjustHeight(200);
+            }
+        }
    }
    
    // Following is from http://alvinabad.wordpress.com/2009/03/05/firebug-consolelogger/ -- prevents errors if no Javascript console
