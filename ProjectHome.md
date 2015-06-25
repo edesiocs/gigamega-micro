@@ -1,0 +1,1 @@
+Microsoft .Net Framework code for the Netduino and FEZ platforms. Python code for the Beaglebone and Beagleboard. Full tutorials for these projects can be found on my blog www.gigamegablog.com.
